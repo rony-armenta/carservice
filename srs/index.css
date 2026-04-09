@@ -1,0 +1,27 @@
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #f5f5f4;
+    color: #1c1c1a;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+:root {
+    --bg: #f5f5f4;
+    --surface: #ffffff;
+    --border: rgba(0, 0, 0, 0.1);
+    --text: #1c1c1a;
+    --text-muted: #6b6b68;
+    --text-hint: #9b9b97;
+    --accent: #185FA5;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+}
