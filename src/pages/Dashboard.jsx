@@ -8,23 +8,29 @@ import CustomerForm from '../components/Customers/CustomerForm'
 import { useOrders } from '../hooks/useOrders'
 import { useCustomers } from '../hooks/useCustomers'
 
+const Spinner = () => (
+  <div style={{ padding: '3rem', textAlign: 'center', color: '#9b9b97', fontSize: 13 }}>
+    Loading...
+  </div>
+)
+
 export default function Dashboard() {
-  const { orders, filter, setFilter, addOrder, addSubOrder, updateStatus, subOrdersOf, stats } = useOrders()
-  const { customers, addCustomer, updateCarStatus, total } = useCustomers()
+  const { orders, filter, setFilter, addOrder, addSubOrder, updateStatus, subOrdersOf, stats, loading: ordersLoading } = useOrders()
+  const { customers, addCustomer, updateCarStatus, total, loading: customersLoading } = useCustomers()
 
-  const [showOrderForm, setShowOrderForm]       = useState(false)
+  const [showOrderForm, setShowOrderForm]   = useState(false)
   const [showCustomerForm, setShowCustomerForm] = useState(false)
-  const [subOrderParent, setSubOrderParent]     = useState(null) // parentId for sub-order form
-
-  const handleAddSubOrder = (parentId) => setSubOrderParent(parentId)
+  const [subOrderParent, setSubOrderParent] = useState(null)
 
   const handleSaveOrder = (data) => {
-    if (data.parentId) addSubOrder(data.parentId, data)
-    else addOrder(data)
+    if (data.parentId) return addSubOrder(data.parentId, data)
+    return addOrder(data)
   }
 
+  const loading = ordersLoading || customersLoading
+
   return (
-    <div style={{ padding: '1.25rem', maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
       <Topbar />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: '1.5rem' }}>
@@ -34,24 +40,25 @@ export default function Dashboard() {
         <StatCard label="Customers"       value={total}            sub="total registered" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '1rem' }}>
-        <WorkOrders
-          orders={orders}
-          filter={filter}
-          setFilter={setFilter}
-          onAdd={() => setShowOrderForm(true)}
-          onStatusChange={updateStatus}
-          onAddSubOrder={handleAddSubOrder}
-          subOrdersOf={subOrdersOf}
-        />
-        <Customers
-          customers={customers}
-          onAdd={() => setShowCustomerForm(true)}
-          onCarStatusChange={updateCarStatus}
-        />
-      </div>
+      {loading ? <Spinner /> : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '1rem' }}>
+          <WorkOrders
+            orders={orders}
+            filter={filter}
+            setFilter={setFilter}
+            onAdd={() => setShowOrderForm(true)}
+            onStatusChange={updateStatus}
+            onAddSubOrder={(id) => setSubOrderParent(id)}
+            subOrdersOf={subOrdersOf}
+          />
+          <Customers
+            customers={customers}
+            onAdd={() => setShowCustomerForm(true)}
+            onCarStatusChange={updateCarStatus}
+          />
+        </div>
+      )}
 
-      {/* New main order form */}
       {showOrderForm && (
         <WorkOrderForm
           customers={customers}
@@ -60,7 +67,6 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Sub-order form — triggered from a row */}
       {subOrderParent && (
         <WorkOrderForm
           customers={customers}
