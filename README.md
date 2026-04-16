@@ -67,15 +67,17 @@ carservice/
     ├── main.jsx                   # App entry point
     ├── App.jsx                    # Root + auth guard + page routing
     ├── index.css                  # Global reset + CSS variables
+    ├── services/
+    │   └── api.js                 # Central fetch wrapper for all API calls
     ├── context/
-    │   └── AuthContext.jsx        # Hardcoded login/logout state
+    │   └── AuthContext.jsx        # Login/logout wired to POST /api/users/login
     ├── data/
-    │   └── mockData.js            # In-memory data (to be replaced by API)
+    │   └── mockData.js            # Legacy in-memory data (no longer used)
     ├── utils/
     │   └── formatters.js          # Status labels, badge styles, avatar colors, date helper
     ├── hooks/
-    │   ├── useOrders.js           # Order state, filtering, addOrder, addSubOrder, updateStatus
-    │   └── useCustomers.js        # Customer state, addCustomer, editCustomer, deleteCustomer, updateCarStatus
+    │   ├── useOrders.js           # Orders from API — addOrder, addSubOrder, updateStatus
+    │   └── useCustomers.js        # Customers from API — add, edit, delete, car status
     ├── components/
     │   ├── StatCard.jsx           # Summary metric card
     │   ├── Layout/
@@ -85,16 +87,16 @@ carservice/
     │   ├── WorkOrders/
     │   │   ├── WorkOrders.jsx     # Panel + filter bar
     │   │   ├── WorkOrderRow.jsx   # Single order row with sub-order expand
-    │   │   └── WorkOrderForm.jsx  # Modal form — customer picklist + car status validation
+    │   │   └── WorkOrderForm.jsx  # Modal — customer picklist, car status validation, API errors
     │   └── Customers/
     │       ├── Customers.jsx      # Panel
     │       ├── CustomerRow.jsx    # Single customer row with car status dropdown
-    │       └── CustomerForm.jsx   # Modal form — supports create and edit
+    │       └── CustomerForm.jsx   # Modal — supports create and edit
     └── pages/
-        ├── Dashboard.jsx          # Assembles everything, owns modal open/close state
+        ├── Dashboard.jsx          # Assembles everything, loading state
         ├── LoginPage.jsx          # Login screen — "Powered by: Claid 🔧"
         ├── CustomersPage.jsx      # Full CRUD table for customers & vehicles
-        └── UsersPage.jsx          # Users & roles management (admin only)
+        └── UsersPage.jsx          # Users & roles — wired to API
 ```
 
 ---
@@ -177,8 +179,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ca
 ### Order
 ```js
 {
-  id: String,             // e.g. '#042'
-  parentId: String|null,  // null = main order, '#042' = sub-order
+  id: Number,
+  parentId: Number|null,  // null = main order
   customerId: Number,
   vehicleId: Number,
   description: String,
@@ -192,18 +194,20 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ca
 ## Features built
 
 ### Frontend
-- [x] Login screen with auth guard — "Powered by: Claid 🔧"
+- [x] Login screen wired to API — "Powered by: Claid 🔧"
 - [x] Left sidebar with clean SVG icons, collapse/expand toggle
-- [x] Dashboard page with summary stat cards
+- [x] Dashboard page with summary stat cards + loading state
 - [x] Work orders panel — filter bar, inline status dropdown
-- [x] New work order form — customer/car picklist from registry
+- [x] New work order form — customer/car picklist, mechanic dropdown from DB
 - [x] Sub-orders — create under pending/in-progress parents, expand/collapse
-- [x] Customers & Vehicles page — full CRUD table
-- [x] Car status dropdown per customer (Active / In repair / Inactive)
-- [x] Users & Roles page — admin can create, edit, delete users
+- [x] Customers & Vehicles page — full CRUD wired to API
+- [x] Car status dropdown per customer — updates DB in real time
+- [x] Users & Roles page — full CRUD wired to API
 - [x] Page routing (Dashboard / Customers / Users)
+- [x] Loading states on Dashboard and Users page
+- [x] API error messages shown inline in forms
 
-### Backend (API ready, frontend not yet wired)
+### Backend
 - [x] Express server on port 3001
 - [x] PostgreSQL connection with `pg` pool
 - [x] All CRUD routes for customers, vehicles, orders, mechanics, users
@@ -218,14 +222,6 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ca
 ---
 
 ## Pending / next steps
-
-### Connect frontend to backend API
-- [ ] Create `src/services/api.js` — central fetch wrapper
-- [ ] Replace `useOrders.js` mock data with API calls
-- [ ] Replace `useCustomers.js` mock data with API calls
-- [ ] Wire `AuthContext` login to `POST /api/users/login`
-- [ ] Wire `UsersPage` to API
-- [ ] Handle loading and error states in the UI
 
 ### Docker + Minikube
 - [ ] Create `Dockerfile` for React frontend (Vite build served via nginx)
@@ -244,6 +240,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ca
 - [ ] Mechanic assignment panel
 - [ ] Search and filter customers
 - [ ] Password hashing (bcrypt) before moving to production
+- [ ] Wire CustomersPage CRUD to API (currently still uses hook directly)
 
 ---
 
