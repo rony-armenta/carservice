@@ -1,14 +1,26 @@
 const BASE = 'http://localhost:3001/api'
 
+// Token stored in memory — more secure than localStorage
+let authToken = null
+
+export function setToken(token) { authToken = token }
+export function clearToken()    { authToken = null  }
+
 async function request(method, path, body) {
-  const opts = {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-  }
+  const headers = { 'Content-Type': 'application/json' }
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`
+
+  const opts = { method, headers }
   if (body) opts.body = JSON.stringify(body)
 
-  const res = await fetch(`${BASE}${path}`, opts)
+  const res  = await fetch(`${BASE}${path}`, opts)
   const data = await res.json()
+
+  if (res.status === 401) {
+    // Token expired or invalid — clear it and force re-login
+    clearToken()
+    window.dispatchEvent(new Event('auth:expired'))
+  }
 
   if (!res.ok) throw new Error(data.error || 'Something went wrong')
   return data

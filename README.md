@@ -17,6 +17,10 @@ A shop management web app built with React + Vite (frontend) and Node.js + Expre
 - Node.js + Express
 - PostgreSQL (latest, Fedora)
 - `pg` driver
+- `bcrypt` — password hashing
+- `jsonwebtoken` — JWT auth
+- `express-rate-limit` — brute force protection
+- `express-validator` — input sanitization
 
 ---
 
@@ -45,58 +49,78 @@ curl http://localhost:3001/api/health
 
 ---
 
+## First time setup — security
+
+```bash
+# 1 — Hash existing plain text passwords (run once!)
+cd carservice/server
+node scripts/hashPasswords.js
+
+# 2 — Generate a strong JWT secret
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+# Paste the output into server/.env as JWT_SECRET
+```
+
+---
+
 ## Folder structure
 
 ```
 carservice/
+├── .gitignore                         # Excludes .env and node_modules
 ├── index.html
 ├── package.json
 ├── vite.config.js
-├── server/                        ← Node.js + Express backend
-│   ├── .env                       # DB credentials (never commit this)
+├── server/                            ← Node.js + Express backend
+│   ├── .env                           # DB credentials + JWT secret (never commit)
 │   ├── package.json
-│   ├── db.js                      # PostgreSQL pool connection
-│   ├── index.js                   # Express entry point
-│   └── routes/
-│       ├── customers.js           # CRUD + car status
-│       ├── vehicles.js            # Vehicle status updates
-│       ├── orders.js              # CRUD + all validations
-│       ├── mechanics.js           # List active mechanics
-│       └── users.js               # CRUD + login
+│   ├── db.js                          # PostgreSQL pool connection
+│   ├── index.js                       # Express entry — CORS, rate limit, security headers
+│   ├── middleware/
+│   │   ├── auth.js                    # JWT verify + requireAdmin role guard
+│   │   └── validate.js                # express-validator runner
+│   ├── routes/
+│   │   ├── customers.js               # CRUD + input validation + admin-only delete
+│   │   ├── vehicles.js                # Vehicle status updates
+│   │   ├── orders.js                  # CRUD + all validations + input sanitization
+│   │   ├── mechanics.js               # List active mechanics
+│   │   └── users.js                   # CRUD + bcrypt + JWT login + rate limit
+│   └── scripts/
+│       └── hashPasswords.js           # One-time migration: hash plain text passwords
 └── src/
-    ├── main.jsx                   # App entry point
-    ├── App.jsx                    # Root + auth guard + page routing
-    ├── index.css                  # Global reset + CSS variables
+    ├── main.jsx
+    ├── App.jsx
+    ├── index.css
     ├── services/
-    │   └── api.js                 # Central fetch wrapper for all API calls
+    │   └── api.js                     # Fetch wrapper — attaches JWT, handles 401/expiry
     ├── context/
-    │   └── AuthContext.jsx        # Login/logout wired to POST /api/users/login
+    │   └── AuthContext.jsx            # Login/logout — stores JWT in memory, handles expiry
     ├── data/
-    │   └── mockData.js            # Legacy in-memory data (no longer used)
+    │   └── mockData.js                # Legacy (no longer used)
     ├── utils/
-    │   └── formatters.js          # Status labels, badge styles, avatar colors, date helper
+    │   └── formatters.js
     ├── hooks/
-    │   ├── useOrders.js           # Orders from API — addOrder, addSubOrder, updateStatus
-    │   └── useCustomers.js        # Customers from API — add, edit, delete, car status
+    │   ├── useOrders.js
+    │   └── useCustomers.js
     ├── components/
-    │   ├── StatCard.jsx           # Summary metric card
+    │   ├── StatCard.jsx
     │   ├── Layout/
-    │   │   ├── Sidebar.jsx        # Left sidebar with SVG icons, collapse toggle, logout
-    │   │   ├── AppLayout.jsx      # Sidebar + main content wrapper
-    │   │   └── Topbar.jsx         # Dashboard header with date
+    │   │   ├── Sidebar.jsx
+    │   │   ├── AppLayout.jsx
+    │   │   └── Topbar.jsx
     │   ├── WorkOrders/
-    │   │   ├── WorkOrders.jsx     # Panel + filter bar
-    │   │   ├── WorkOrderRow.jsx   # Single order row with sub-order expand
-    │   │   └── WorkOrderForm.jsx  # Modal — customer picklist, car status validation, API errors
+    │   │   ├── WorkOrders.jsx
+    │   │   ├── WorkOrderRow.jsx
+    │   │   └── WorkOrderForm.jsx
     │   └── Customers/
-    │       ├── Customers.jsx      # Panel
-    │       ├── CustomerRow.jsx    # Single customer row with car status dropdown
-    │       └── CustomerForm.jsx   # Modal — supports create and edit
+    │       ├── Customers.jsx
+    │       ├── CustomerRow.jsx
+    │       └── CustomerForm.jsx
     └── pages/
-        ├── Dashboard.jsx          # Assembles everything, loading state
-        ├── LoginPage.jsx          # Login screen — "Powered by: Claid 🔧"
-        ├── CustomersPage.jsx      # Full CRUD table for customers & vehicles
-        └── UsersPage.jsx          # Users & roles — wired to API
+        ├── Dashboard.jsx
+        ├── LoginPage.jsx              # "Powered by: Claid 🔧"
+        ├── CustomersPage.jsx
+        └── UsersPage.jsx
 ```
 
 ---
@@ -104,16 +128,14 @@ carservice/
 ## PostgreSQL setup (Fedora)
 
 ```bash
-# Install
 sudo dnf install -y postgresql-server postgresql-contrib
 sudo postgresql-setup --initdb
 sudo systemctl enable --now postgresql
 
-# Fix auth method (change ident to md5 in pg_hba.conf)
+# Fix auth (change ident to md5 in pg_hba.conf)
 sudo nano /var/lib/pgsql/data/pg_hba.conf
 sudo systemctl restart postgresql
 
-# Create user and database
 sudo -u postgres psql
 ```
 
@@ -134,29 +156,49 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ca
 - `vehicles` — id, customer_id, make_model, plate, car_status
 - `orders` — id, parent_id, vehicle_id, customer_id, mechanic_id, description, status, created_at, updated_at
 - `mechanics` — id, name, active
-- `users` — id, name, email, password, role, active
+- `users` — id, name, email, password (bcrypt), role, active
 
 ### API endpoints
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/health | Health check |
-| GET | /api/customers | List all customers with vehicle |
-| POST | /api/customers | Create customer + vehicle |
-| PUT | /api/customers/:id | Update customer + vehicle |
-| PATCH | /api/customers/:id/car-status | Update car status |
-| DELETE | /api/customers/:id | Delete customer (cascades) |
-| GET | /api/vehicles | List all vehicles |
-| PATCH | /api/vehicles/:id/status | Update vehicle status |
-| GET | /api/orders | List all orders |
-| POST | /api/orders | Create order (with validations) |
-| PATCH | /api/orders/:id/status | Update order status (with validations) |
-| DELETE | /api/orders/:id | Delete order |
-| GET | /api/mechanics | List active mechanics |
-| GET | /api/users | List users (no passwords) |
-| POST | /api/users/login | Login |
-| POST | /api/users | Create user |
-| PUT | /api/users/:id | Update user |
-| DELETE | /api/users/:id | Delete user |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | /api/health | public | Health check |
+| POST | /api/users/login | public | Login — returns JWT |
+| GET | /api/users | admin | List users |
+| POST | /api/users | admin | Create user |
+| PUT | /api/users/:id | admin | Update user |
+| DELETE | /api/users/:id | admin | Delete user |
+| GET | /api/customers | any | List customers |
+| POST | /api/customers | any | Create customer |
+| PUT | /api/customers/:id | any | Update customer |
+| PATCH | /api/customers/:id/car-status | any | Update car status |
+| DELETE | /api/customers/:id | admin | Delete customer |
+| GET | /api/vehicles | any | List vehicles |
+| PATCH | /api/vehicles/:id/status | any | Update vehicle status |
+| GET | /api/orders | any | List orders |
+| POST | /api/orders | any | Create order |
+| PATCH | /api/orders/:id/status | any | Update order status |
+| DELETE | /api/orders/:id | any | Delete order |
+| GET | /api/mechanics | any | List mechanics |
+
+---
+
+## Security measures implemented
+
+- **bcrypt** password hashing (12 salt rounds)
+- **JWT tokens** — issued on login, required on all protected routes
+- **Token stored in memory** (not localStorage) — cleared on logout or expiry
+- **Auto logout** when token expires — frontend listens for `auth:expired` event
+- **Role-based access** — `requireAdmin` middleware on sensitive routes
+- **Login rate limiting** — 10 attempts per 15 min per IP
+- **Global rate limiting** — 200 requests per 15 min
+- **Input validation + sanitization** on all POST/PUT routes via express-validator
+- **Parameterized queries** everywhere — no raw SQL string interpolation
+- **Security headers** — X-Content-Type-Options, X-Frame-Options, X-XSS-Protection
+- **Body size limit** — 10kb max request body
+- **Generic error messages** — no internal details leaked to client
+- **User enumeration prevention** — same error for wrong email or wrong password
+- **Self-delete prevention** — admin cannot delete their own account
+- **.gitignore** — .env files never committed
 
 ---
 
@@ -167,12 +209,12 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ca
 {
   id: Number,
   name: String,
-  initials: String,       // auto-generated from name
-  car: String,            // e.g. "Honda Civic 2019"
-  plate: String,          // license plate
+  initials: String,
+  car: String,
+  plate: String,
   carStatus: String,      // 'active' | 'in-repair' | 'inactive'
-  orders: Number,         // order count
-  color: String,          // avatar color: 'blue' | 'teal' | 'coral' | 'purple' | 'amber'
+  orders: Number,
+  color: String,
 }
 ```
 
@@ -180,7 +222,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ca
 ```js
 {
   id: Number,
-  parentId: Number|null,  // null = main order
+  parentId: Number|null,
   customerId: Number,
   vehicleId: Number,
   description: String,
@@ -195,61 +237,55 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO ca
 
 ### Frontend
 - [x] Login screen wired to API — "Powered by: Claid 🔧"
-- [x] Left sidebar with clean SVG icons, collapse/expand toggle
-- [x] Dashboard page with summary stat cards + loading state
+- [x] JWT token stored in memory, sent with every API request
+- [x] Auto logout on token expiry
+- [x] Left sidebar with SVG icons, collapse/expand
+- [x] Dashboard with stat cards + loading state
 - [x] Work orders panel — filter bar, inline status dropdown
-- [x] New work order form — customer/car picklist, mechanic dropdown from DB
-- [x] Sub-orders — create under pending/in-progress parents, expand/collapse
-- [x] Customers & Vehicles page — full CRUD wired to API
-- [x] Car status dropdown per customer — updates DB in real time
-- [x] Users & Roles page — full CRUD wired to API
-- [x] Page routing (Dashboard / Customers / Users)
-- [x] Loading states on Dashboard and Users page
+- [x] New work order form — customer/car picklist, mechanic dropdown
+- [x] Sub-orders — expand/collapse, create under pending/in-progress parents
+- [x] Customers & Vehicles page — full CRUD
+- [x] Car status dropdown per customer
+- [x] Users & Roles page — admin-only CRUD
 - [x] API error messages shown inline in forms
 
 ### Backend
-- [x] Express server on port 3001
-- [x] PostgreSQL connection with `pg` pool
-- [x] All CRUD routes for customers, vehicles, orders, mechanics, users
-- [x] Validation: block order if car is inactive
-- [x] Validation: block duplicate active order for same vehicle
-- [x] Validation: block sub-order if parent is done
-- [x] Validation: block duplicate sub-order descriptions
-- [x] Validation: block marking order done if sub-orders still pending
-- [x] Auto set car to `in-repair` when order is created
-- [x] Auto set car back to `active` when order is marked done
+- [x] Express + PostgreSQL fully wired
+- [x] JWT auth on all protected routes
+- [x] bcrypt password hashing
+- [x] Input validation on all routes
+- [x] All order business logic validations
+- [x] Auto car status updates on order create/complete
+- [x] Rate limiting on login and global
 
 ---
 
 ## Pending / next steps
 
 ### Docker + Minikube
-- [ ] Create `Dockerfile` for React frontend (Vite build served via nginx)
+- [ ] Create `Dockerfile` for React frontend (Vite build via nginx)
 - [ ] Create `Dockerfile` for Node.js backend
 - [ ] Write `docker-compose.yml` (frontend + backend + postgres)
-- [ ] Write Kubernetes manifests for Minikube:
-  - `deployment.yaml` for frontend and backend
-  - `service.yaml` to expose both
-  - `configmap.yaml` for environment variables
-  - `persistentvolumeclaim.yaml` for PostgreSQL data
+- [ ] Write Kubernetes manifests:
+  - `deployment.yaml`
+  - `service.yaml`
+  - `configmap.yaml`
+  - `persistentvolumeclaim.yaml`
 
 ### Other improvements
-- [ ] Confirm dialog before marking order as Done (frontend)
-- [ ] Edit and delete orders
+- [ ] Confirm dialog before marking order as Done
+- [ ] Edit and delete orders from the UI
 - [ ] Invoicing & revenue section
 - [ ] Mechanic assignment panel
 - [ ] Search and filter customers
-- [ ] Password hashing (bcrypt) before moving to production
-- [ ] Wire CustomersPage CRUD to API (currently still uses hook directly)
+- [ ] Refresh token flow (currently JWT expires after 8h — user must re-login)
 
 ---
 
-## Mechanics available (seeded in DB)
-- Carlos
-- Miguel
-- Luis
-
-## Demo users (seeded in DB)
+## Demo users (seeded in DB — passwords hashed after running migration)
 - admin@carservice.com / admin123 (admin)
 - carlos@carservice.com / carlos123 (mechanic)
 - luis@carservice.com / luis123 (mechanic)
+
+## Mechanics (seeded in DB)
+- Carlos, Miguel, Luis

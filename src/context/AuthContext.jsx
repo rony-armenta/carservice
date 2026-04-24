@@ -1,19 +1,31 @@
-import { createContext, useContext, useState } from 'react'
-import { api } from '../services/api'
+import { createContext, useContext, useState, useEffect } from 'react'
+import { api, setToken, clearToken } from '../services/api'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser]   = useState(null)
-  const [error, setError] = useState('')
+  const [user, setUser]     = useState(null)
+  const [error, setError]   = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Listen for token expiry from api.js
+  useEffect(() => {
+    const handleExpired = () => {
+      setUser(null)
+      clearToken()
+      setError('Your session has expired. Please log in again.')
+    }
+    window.addEventListener('auth:expired', handleExpired)
+    return () => window.removeEventListener('auth:expired', handleExpired)
+  }, [])
 
   const login = async (email, password) => {
     setLoading(true)
     setError('')
     try {
-      const data = await api.login(email, password)
-      setUser(data)
+      const { token, user: userData } = await api.login(email, password)
+      setToken(token)
+      setUser(userData)
       return true
     } catch (err) {
       setError(err.message)
@@ -23,7 +35,10 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const logout = () => setUser(null)
+  const logout = () => {
+    clearToken()
+    setUser(null)
+  }
 
   return (
     <AuthContext.Provider value={{ user, login, logout, error, loading }}>
