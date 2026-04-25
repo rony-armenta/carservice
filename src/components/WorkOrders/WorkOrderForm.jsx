@@ -1,8 +1,15 @@
 import { useState, useEffect } from 'react'
 import { api } from '../../services/api'
+import { ServiceTypeField } from '../../pages/CarRecordsPage'
+
+const DEFAULT_SERVICE_TYPES = [
+  'Oil Change', 'Brake Service', 'Tire Rotation', 'Engine Diagnostics',
+  'Transmission Service', 'AC Service', 'Electrical Repair', 'Suspension',
+  'Coolant Flush', 'Tune-up', 'Battery Replacement', 'Other',
+]
 
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }
-const modal   = { background: '#fff', borderRadius: 12, padding: '1.5rem', width: '100%', maxWidth: 440, border: '0.5px solid rgba(0,0,0,0.1)' }
+const modal   = { background: '#fff', borderRadius: 12, padding: '1.5rem', width: '100%', maxWidth: 440, border: '0.5px solid rgba(0,0,0,0.1)', maxHeight: '90vh', overflowY: 'auto' }
 const label   = { fontSize: 12, color: '#6b6b68', marginBottom: 4, display: 'block' }
 const inp     = { width: '100%', padding: '8px 10px', fontSize: 13, border: '0.5px solid rgba(0,0,0,0.2)', borderRadius: 8, outline: 'none', marginBottom: '1rem', fontFamily: 'inherit', background: '#fff' }
 const btnSec  = { fontSize: 13, padding: '7px 16px', borderRadius: 8, cursor: 'pointer', border: '0.5px solid rgba(0,0,0,0.2)', background: 'transparent' }
@@ -10,12 +17,14 @@ const btnPri  = { fontSize: 13, padding: '7px 16px', borderRadius: 8, cursor: 'p
 const btnDis  = { fontSize: 13, padding: '7px 16px', borderRadius: 8, border: 'none', fontFamily: 'inherit', background: '#ccc', color: '#888', cursor: 'not-allowed' }
 
 export default function WorkOrderForm({ customers, onClose, onSave, parentId = null }) {
-  const [customerId, setCustomerId] = useState('')
-  const [desc, setDesc]             = useState('')
-  const [mechId, setMechId]         = useState('')
-  const [mechanics, setMechanics]   = useState([])
-  const [apiError, setApiError]     = useState('')
-  const [saving, setSaving]         = useState(false)
+  const [customerId, setCustomerId]     = useState('')
+  const [desc, setDesc]                 = useState('')
+  const [serviceType, setServiceType]   = useState('')
+  const [serviceTypes, setServiceTypes] = useState(DEFAULT_SERVICE_TYPES)
+  const [mechId, setMechId]             = useState('')
+  const [mechanics, setMechanics]       = useState([])
+  const [apiError, setApiError]         = useState('')
+  const [saving, setSaving]             = useState(false)
 
   useEffect(() => {
     api.getMechanics().then(setMechanics).catch(() => {})
@@ -32,10 +41,11 @@ export default function WorkOrderForm({ customers, onClose, onSave, parentId = n
     try {
       await onSave({
         desc,
-        car:        selected.car,
-        customerId: selected.id,
-        vehicleId:  selected.vehicle_id,
-        mechId:     mechId || null,
+        serviceType:  serviceType || null,
+        car:          selected.car,
+        customerId:   selected.id,
+        vehicleId:    selected.vehicle_id,
+        mechId:       mechId || null,
         parentId,
       })
       onClose()
@@ -63,7 +73,6 @@ export default function WorkOrderForm({ customers, onClose, onSave, parentId = n
           ))}
         </select>
 
-        {/* Car status feedback */}
         {selected && (
           <div style={{
             marginTop: -8, marginBottom: '1rem', padding: '8px 10px', borderRadius: 8, fontSize: 12,
@@ -77,6 +86,15 @@ export default function WorkOrderForm({ customers, onClose, onSave, parentId = n
                 : '✓ Vehicle is active and available.'}
           </div>
         )}
+
+        <label style={label}>Service type</label>
+        <ServiceTypeField
+          value={serviceType}
+          onChange={setServiceType}
+          serviceTypes={serviceTypes}
+          onAddType={(t) => setServiceTypes(prev => prev.includes(t) ? prev : [...prev, t])}
+          style={{ marginBottom: '1rem' }}
+        />
 
         <label style={label}>Service description</label>
         <input style={inp} placeholder="e.g. Oil change & filter" value={desc}
