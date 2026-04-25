@@ -3,12 +3,13 @@ import cors           from 'cors'
 import dotenv         from 'dotenv'
 import rateLimit      from 'express-rate-limit'
 
-import customersRouter from './routes/customers.js'
-import vehiclesRouter  from './routes/vehicles.js'
-import ordersRouter    from './routes/orders.js'
-import mechanicsRouter from './routes/mechanics.js'
-import usersRouter     from './routes/users.js'
-import { requireAuth } from './middleware/auth.js'
+import customersRouter  from './routes/customers.js'
+import vehiclesRouter   from './routes/vehicles.js'
+import ordersRouter     from './routes/orders.js'
+import mechanicsRouter  from './routes/mechanics.js'
+import usersRouter      from './routes/users.js'
+import carRecordsRouter from './routes/carRecords.js'
+import { requireAuth }  from './middleware/auth.js'
 
 dotenv.config()
 
@@ -25,18 +26,18 @@ app.use(cors({
   credentials: true,
 }))
 
-app.use(express.json({ limit: '10kb' })) // cap body size
+app.use(express.json({ limit: '10kb' }))
 
-// ── Global rate limit (all routes) ───────────────────────────────────────────
+// ── Global rate limit ─────────────────────────────────────────────────────────
 app.use(rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
+  windowMs: 15 * 60 * 1000,
   max: 200,
   message: { error: 'Too many requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
 }))
 
-// ── Security headers ─────────────────────────────────────────────────────────
+// ── Security headers ──────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff')
   res.setHeader('X-Frame-Options', 'DENY')
@@ -44,17 +45,18 @@ app.use((req, res, next) => {
   next()
 })
 
-// ── Public routes (no auth needed) ───────────────────────────────────────────
+// ── Public routes ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }))
-app.use('/api/users',  usersRouter) // login is inside here, protected routes too
+app.use('/api/users', usersRouter)
 
-// ── Protected routes (JWT required) ──────────────────────────────────────────
-app.use('/api/customers', requireAuth, customersRouter)
-app.use('/api/vehicles',  requireAuth, vehiclesRouter)
-app.use('/api/orders',    requireAuth, ordersRouter)
-app.use('/api/mechanics', requireAuth, mechanicsRouter)
+// ── Protected routes ──────────────────────────────────────────────────────────
+app.use('/api/customers',   requireAuth, customersRouter)
+app.use('/api/vehicles',    requireAuth, vehiclesRouter)
+app.use('/api/orders',      requireAuth, ordersRouter)
+app.use('/api/mechanics',   requireAuth, mechanicsRouter)
+app.use('/api/car-records', requireAuth, carRecordsRouter)
 
-// ── 404 fallback ─────────────────────────────────────────────────────────────
+// ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((req, res) => res.status(404).json({ error: 'Route not found' }))
 
 // ── Global error handler ──────────────────────────────────────────────────────
