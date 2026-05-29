@@ -1,0 +1,6 @@
+FROM qwen2.5-coder:7b-instruct-q4_K_M
+
+PARAMETER num_ctx 2048
+PARAMETER num_batch 128
+PARAMETER num_thread 6
+PARAMETER num_keep 4

@@ -116,6 +116,7 @@ carservice/
         ├── CustomersPage.jsx              # Full CRUD table. Uses useCustomers hook. Edit/delete with confirm dialog.
         ├── CarRecordsPage.jsx             # Vehicle service history. Exports ServiceTypeField (reused in WorkOrderForm). Timeline cards (expand/collapse). Search + vehicle filter. Full CRUD modal.
         └── UsersPage.jsx                  # Admin-only CRUD. Fetches /api/users directly. Cannot delete yourself.
+local work dir: /home/admin/carservice
 ```
 
 ---
